@@ -1,0 +1,10 @@
+#define CMD_START 101
+#define CMD_STOP 102
+#define CMD_QUIT 103
+#define CMD_EVENT 104
+#define CMD_NONE 0
+
+#define STATE_STARTED 201
+#define STATE_STOPPED 202
+
+#define VDIF_PKT_SIZE 5000
