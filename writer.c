@@ -24,7 +24,7 @@ int main(int argc, char** argv)
   key_t key = DADA_DEFAULT_BLOCK_KEY;
   int status = 0;
 
-  char eventfile[128];
+  char eventfile[128], src[SRCMAXSIZE];;
   FILE *infd, *evfd;
 
   //get this many bytes at a time from input file (XXX: later, from data socket)
@@ -79,8 +79,10 @@ int main(int argc, char** argv)
     fprintf(stderr,"Writer: Failed to create listening socket.\n");
     exit(1);
   }
-  
+    
   ii = 0;
+  sprintf(src,"NONE");
+
   //in final version, this loop will be while(1)
   while(!feof(infd)) {
     ii++;
@@ -88,7 +90,7 @@ int main(int argc, char** argv)
 
     if(state == STATE_STOPPED) {
       if(cmd == CMD_NONE)
-	cmd = wait_for_cmd(&c);
+	cmd = wait_for_cmd(&c,src);
 
       if(cmd == CMD_START) {
 	state = STATE_STARTED;
@@ -98,7 +100,7 @@ int main(int argc, char** argv)
 	cmd = CMD_NONE;
       }
       else if(cmd == CMD_EVENT) {
-	sprintf(eventfile,"event%d.out",eventcount);
+	sprintf(eventfile,"%s_event_%04d.out",src,eventcount);
 	if((evfd = fopen(eventfile,"w")) == NULL) {
 	  fprintf(stderr,"Writer: Could not open file %s for writing.\n",eventfile);
 	  exit(1);
@@ -126,7 +128,7 @@ int main(int argc, char** argv)
       
       //if input is waiting on listening socket, read it
       if(FD_ISSET(c.rqst,&readfds)) {
-	cmd = wait_for_cmd(&c);
+	cmd = wait_for_cmd(&c,src);
       }
 
       if(cmd == CMD_EVENT) {
@@ -135,8 +137,8 @@ int main(int argc, char** argv)
 	  exit(1);
 	fprintf(stderr,"after ipcio_close\n");
 	
-	//dump DB to file (XXX: filename should contain the source name). 
-	sprintf(eventfile,"event%d.out",eventcount);
+	//dump DB to file
+	sprintf(eventfile,"%s_event_%04d.out",src,eventcount);
 	if((evfd = fopen(eventfile,"w")) == NULL) {
 	  fprintf(stderr,"Writer: Could not open file %s for writing.\n",eventfile);
 	  exit(1);

@@ -13,7 +13,7 @@ typedef struct {
   int rqst;       /* socket accepting the request */
   socklen_t alen;       /* length of address structure */
   struct sockaddr_in my_addr;    
-  struct sockaddr_in client_addr;  
+  struct sockaddr_in rem_addr;  
   int sockoptval;
   char hostname[MAXHOSTNAME]; /* host name, for debugging */  
   char buf[MAXINBUFSIZE]; //incoming messages go here

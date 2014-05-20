@@ -8,3 +8,6 @@
 #define STATE_STOPPED 202
 
 #define VDIF_PKT_SIZE 5000
+
+#define SRCMAXSIZE 32
+

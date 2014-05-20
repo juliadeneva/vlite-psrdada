@@ -74,7 +74,7 @@ int main(int argc, char** argv)
     fprintf(stderr,"Reader: Failed to create listening socket.\n");
     exit(1);
   }
-
+  
   //enter started state immediately
   state = STATE_STARTED;
   if(ipcio_open(&data_block,'R') < 0)
