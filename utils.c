@@ -103,7 +103,7 @@ int wait_for_cmd(Connection* c, char *src)
 
   //while(1) {
 
-    //read from socket (blocking)
+    //read from socket (blocking); is it better to use recv()?
     nbytes = read(c->rqst,c->buf,MAXINBUFSIZE);
     sleep(2);
     printf("wait_for_cmd: read %d bytes: %.*s\n",nbytes,nbytes,c->buf);
