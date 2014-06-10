@@ -8,9 +8,6 @@
 #define WRITER_SERVICE_PORT  20001
 #define READER_SERVICE_PORT  20002
 
-#define MULTI_OBSINFO_PORT 53001
-#define MULTI_ANTPROP_PORT 53000
-
 typedef struct {
   int svc;        /* listening socket providing service */
   int rqst;       /* socket accepting the request */
