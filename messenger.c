@@ -6,18 +6,21 @@
 #include "def.h"
 #include "executor.h"
 #include "vlite_xml.h"
+#include "alert.h"
 
 #define MSGMAXSIZE 8192
 
 //Multicast ports
 #define MULTI_OBSINFO_PORT 53001
 #define MULTI_ANTPROP_PORT 53000
+#define MULTI_ALERT_PORT 20011
 #define MULTI_TEST_PORT 53901
 
 //Multicast group IPs
 char testgrp[] = "239.199.3.2";
 char obsinfogrp[] = "239.192.3.2";
 char antpropgrp[] = "239.192.3.1";
+char alertgrp[] = "239.192.2.3";
 
 void usage ()
 {
@@ -35,15 +38,15 @@ int main(int argc, char** argv)
   //XXX: in final version, there will be an array of readers and an array of writers, so initial connection attempts as well as each command send will loop over those. (How to get port numbers for all? Specify on command line?)  
   Connection cr, cw, heimdall;
   fd_set readfds;
-  int obsinfosock, antpropsock, maxnsock = 0, nbytes;
+  int obsinfosock, antpropsock, alertsock, maxnsock = 0, nbytes;
 
   ScanInfoDocument D; //multicast message struct
   const ObservationDocument *od;
   const AntPropDocument *ap;
-  
+  AlertDocument A; //multicast alert struct
+
   char scaninfofile[128];
-  char obsmsg[MSGMAXSIZE];
-  char antmsg[MSGMAXSIZE];
+  char msg[MSGMAXSIZE];
   char src[SRCMAXSIZE];
   char from[24]; //ip address of multicast sender
 
@@ -60,7 +63,7 @@ int main(int argc, char** argv)
     if(obsinfosock > maxnsock)
       maxnsock = obsinfosock;
   }
- 
+
   //connect to VLA antprop multicast
   antpropsock = openMultiCastSocket(antpropgrp, MULTI_ANTPROP_PORT);
   if(antpropsock < 0) {
@@ -71,6 +74,18 @@ int main(int argc, char** argv)
     printf("Antprop socket: %d\n",antpropsock);
     if(antpropsock > maxnsock)
       maxnsock = antpropsock;
+  }
+
+  //connect to VLA alert multicast
+  alertsock = openMultiCastSocket(alertgrp, MULTI_ALERT_PORT);
+  if(alertsock < 0) {
+    fprintf(stderr,"Failed to open Alert multicast; openMultiCastSocket = %d\n",alertsock);
+    exit(1);
+  }
+  else {
+    printf("Alert socket: %d\n",alertsock);
+    if(alertsock > maxnsock)
+      maxnsock = alertsock;
   }
 
   /*
@@ -118,18 +133,19 @@ int main(int argc, char** argv)
     FD_ZERO(&readfds);
     FD_SET(obsinfosock, &readfds);
     FD_SET(antpropsock, &readfds);
+    FD_SET(alertsock, &readfds);
     select(maxnsock+1,&readfds,NULL,NULL,NULL);
     
     //Obsinfo socket
     if(FD_ISSET(obsinfosock,&readfds)) {
-      nbytes = MultiCastReceive(obsinfosock, obsmsg, MSGMAXSIZE, from);
+      nbytes = MultiCastReceive(obsinfosock, msg, MSGMAXSIZE, from);
       fprintf(stderr,"Received %d bytes from Obsinfo multicast.\n",nbytes);
       if(nbytes <= 0) {
 	fprintf(stderr,"Error on Obsinfo socket, return value = %d\n",nbytes);
 	continue;
       }
       
-      parseScanInfoDocument(&D, obsmsg);
+      parseScanInfoDocument(&D, msg);
       printScanInfoDocument(&D);
       printf("Message type: %d = %s\n",D.type,ScanInfoTypeString[D.type]);
       if(D.type == SCANINFO_OBSERVATION) {
@@ -157,14 +173,14 @@ int main(int argc, char** argv)
 
     //Antprop socket
     if(FD_ISSET(antpropsock,&readfds)) {
-      nbytes = MultiCastReceive(antpropsock, antmsg, MSGMAXSIZE, from);
+      nbytes = MultiCastReceive(antpropsock, msg, MSGMAXSIZE, from);
       fprintf(stderr,"Received %d bytes from Antprop multicast.\n",nbytes);
       if(nbytes <= 0) {
 	fprintf(stderr,"Error on Antprop socket, return value = %d\n",nbytes);
 	continue;
       }
 
-      parseScanInfoDocument(&D, antmsg);
+      parseScanInfoDocument(&D, msg);
       printScanInfoDocument(&D);
       printf("Message type: %d = %s\n",D.type,ScanInfoTypeString[D.type]);
       if(D.type == SCANINFO_ANTPROP) {
@@ -175,6 +191,25 @@ int main(int argc, char** argv)
 	fclose(sfd);
       }
     }
+
+    //Alert socket
+    if(FD_ISSET(alertsock,&readfds)) {
+      nbytes = MultiCastReceive(alertsock, msg, MSGMAXSIZE, from);
+      fprintf(stderr,"Received %d bytes from Alert multicast.\n",nbytes);
+      if(nbytes <= 0) {
+	fprintf(stderr,"Error on Alert socket, return value = %d\n",nbytes);
+	continue;
+      }
+
+      parseAlertDocument(&A, msg);
+      printAlertDocument(&A);
+      sprintf(scaninfofile,"%f.alert.txt",A.timeStamp);
+      sfd = fopen(scaninfofile,"w");
+      fprintAlertDocument(&A,sfd);
+      fclose(sfd);
+      
+    }
+
 
     /*
     if(FD_ISSET(heimdall.rqst,&readfds)) {
