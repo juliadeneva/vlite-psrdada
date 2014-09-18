@@ -27,19 +27,25 @@ int main(int argc, char** argv)
   char eventfile[128], src[SRCMAXSIZE];;
   FILE *infd, *evfd;
 
-  //get this many bytes at a time from input file (XXX: later, from data socket)
-  int BUFSIZE = 10*VDIF_PKT_SIZE; 
+  //get this many bytes at a time from data socket
+  int BUFSIZE = UDP_HDR_SIZE + VDIF_PKT_SIZE; 
   char buf[BUFSIZE];
 
   int nbytes = 0, eventcount = 0, state = STATE_STOPPED, port = WRITER_SERVICE_PORT;
-  int cmd = CMD_NONE, ii, arg; 
+  int cmd = CMD_NONE, ii, arg, maxsock = 0; 
   
   fd_set readfds;
   struct timeval tv; //timeout for select()--set it to zero 
   tv.tv_sec = 0;
   tv.tv_usec = 0;
+
   Connection c;
   c.sockoptval = 1; //release port immediately after closing connection
+
+  char dev[] = "eth0";
+  Connection raw;
+  raw.alen = sizeof(raw.rem_addr);
+  raw.sockoptval = 32*1024*1024; //size of data socket internal buffer
 
   while ((arg = getopt(argc, argv, "hk:p:")) != -1) {
     switch(arg) {
@@ -64,10 +70,12 @@ int main(int argc, char** argv)
     }
   }
 
+  /*
   if((infd = fopen(infile, "r")) == NULL) {
     fprintf(stderr,"Writer: Could not open file %s\n",infile);
     exit(1);
   }
+  */
   
   //Try to connect to existing data block
   if(ipcio_connect(&data_block,key) < 0)
@@ -79,12 +87,24 @@ int main(int argc, char** argv)
     fprintf(stderr,"Writer: Failed to create listening socket.\n");
     exit(1);
   }
-    
+  maxsock = c.rqst;
+
+  //Open raw data stream socket
+  raw.svc = openRawSocket(dev,0);
+  if(raw.svc < 0) {
+    fprintf(stderr, "Cannot open raw socket on %s. Error code %d\n", dev, raw.svc);
+    exit(1);
+  }
+  setsockopt(raw.svc, SOL_SOCKET, SO_RCVBUF, (char *)&(raw.sockoptval), sizeof(raw.sockoptval));
+  if(raw.svc > maxsock)
+    maxsock = raw.svc;
+
   ii = 0;
   sprintf(src,"NONE");
 
   //in final version, this loop will be while(1)
-  while(!feof(infd)) {
+  //while(!feof(infd)) {
+  while(1) {
     ii++;
     printf("ii: %d state: %d cmd: %d\n",ii,state,cmd);
 
@@ -121,10 +141,10 @@ int main(int argc, char** argv)
     
     //if state is STARTED, poll the command listening socket (in final version, select() will poll both the command listening socket and the data socket)
     if(state == STATE_STARTED) {
-      //why do the FD macros have to be called before each select() call instead of just once outside the loop? 
       FD_ZERO(&readfds);
       FD_SET(c.rqst, &readfds);
-      select(c.rqst+1,&readfds,NULL,NULL,&tv);
+      FD_SET(raw.svc, &readfds);
+      select(maxsock+1,&readfds,NULL,NULL,&tv);
       
       //if input is waiting on listening socket, read it
       if(FD_ISSET(c.rqst,&readfds)) {
@@ -146,10 +166,10 @@ int main(int argc, char** argv)
 	event_to_file(&data_block,evfd);
 	fclose(evfd);
 	eventcount++;
-
+	
 	state = STATE_STOPPED;
 	cmd = CMD_START; 
-
+	
 	//don't write anything to the data block before checking for any pending commands (this can lead to writing a standalone EOD in the data block if there's a stop pending)
 	continue; 
       }
@@ -172,17 +192,34 @@ int main(int argc, char** argv)
       }
       //XXX: what if command is start before a stop is received? 
       
+      //read a packet from the data socket and write it to the ring buffer
+      if(FD_ISSET(raw.svc,&readfds)) {
+	nbytes = recvfrom(raw.svc, buf, BUFSIZE, 0, (struct sockaddr *)&(raw.rem_addr), &(raw.alen));
+
+	if(nbytes == BUFSIZE) {
+	  //fwrite(buf + trim, recvlen-trim, 1, out);
+	  status = ipcio_write(&data_block,buf+UDP_HDR_SIZE,VDIF_PKT_SIZE);
+	  fprintf(stderr,"ipcio_write: %d bytes\n",status);
+	}
+	else if(nbytes <= 0) {
+	  fprintf(stderr,"Raw socket read failed: %d\n.", nbytes);
+	}
+	else 
+	  fprintf(stderr,"Received packet size: %d\n, ignoring.", nbytes);
+	
+      }
+ 
       //XXX: check for overflow of the data block here?
-      nbytes = fread(buf,1,BUFSIZE,infd);
-      fprintf(stderr,"fread: %d bytes\n",nbytes);
-      status = ipcio_write(&data_block,buf,nbytes);
-      fprintf(stderr,"ipcio_write: %d bytes\n",status);
+      //nbytes = fread(buf,1,BUFSIZE,infd);
+      //fprintf(stderr,"fread: %d bytes\n",nbytes);
+      //status = ipcio_write(&data_block,buf,nbytes);
+      //fprintf(stderr,"ipcio_write: %d bytes\n",status);
       
       sleep(2);
     }
   }
   
-  fclose(infd);
+  //fclose(infd);
   
   return 0;
 }

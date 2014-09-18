@@ -43,7 +43,7 @@ int main(int argc, char** argv)
   ScanInfoDocument D; //multicast message struct
   const ObservationDocument *od;
   const AntPropDocument *ap;
-  AlertDocument A; //multicast alert struct
+  //AlertDocument A; 
 
   char scaninfofile[128];
   char msg[MSGMAXSIZE];
@@ -76,6 +76,7 @@ int main(int argc, char** argv)
       maxnsock = antpropsock;
   }
 
+  /*
   //connect to VLA alert multicast
   alertsock = openMultiCastSocket(alertgrp, MULTI_ALERT_PORT);
   if(alertsock < 0) {
@@ -87,6 +88,7 @@ int main(int argc, char** argv)
     if(alertsock > maxnsock)
       maxnsock = alertsock;
   }
+  */
 
   /*
   //connect to testvlite multicast
@@ -101,8 +103,6 @@ int main(int argc, char** argv)
       maxnsock = obsinfosock;
   }
   */
-
-  fprintf(stderr,"maxnsock: %d\n",maxnsock);
 
   //XXX: open a listening socket for Heimdall, wait for connection
   
@@ -126,20 +126,20 @@ int main(int argc, char** argv)
     /* From Walter: The antprop message comes whenever a new scheduling block starts and at each UT midnight (where EOP values might change). Observation document happens before each new scan and a FINISH document at the end of a scheduling block. At the beginning of the scheduling block the antprop document always precedes the observation document.
      */
 
-    fprintf(stderr,"Waiting for multicast message...\n");
+    //fprintf(stderr,"Waiting for multicast message...\n");
 
     //Blocking select() on multicast sockets and Heimdall event trigger socket
     //Have to call FS_SET on each socket before calling select()
     FD_ZERO(&readfds);
     FD_SET(obsinfosock, &readfds);
     FD_SET(antpropsock, &readfds);
-    FD_SET(alertsock, &readfds);
+    //FD_SET(alertsock, &readfds);
     select(maxnsock+1,&readfds,NULL,NULL,NULL);
     
     //Obsinfo socket
     if(FD_ISSET(obsinfosock,&readfds)) {
       nbytes = MultiCastReceive(obsinfosock, msg, MSGMAXSIZE, from);
-      fprintf(stderr,"Received %d bytes from Obsinfo multicast.\n",nbytes);
+      //fprintf(stderr,"Received %d bytes from Obsinfo multicast.\n",nbytes);
       if(nbytes <= 0) {
 	fprintf(stderr,"Error on Obsinfo socket, return value = %d\n",nbytes);
 	continue;
@@ -174,7 +174,7 @@ int main(int argc, char** argv)
     //Antprop socket
     if(FD_ISSET(antpropsock,&readfds)) {
       nbytes = MultiCastReceive(antpropsock, msg, MSGMAXSIZE, from);
-      fprintf(stderr,"Received %d bytes from Antprop multicast.\n",nbytes);
+      //fprintf(stderr,"Received %d bytes from Antprop multicast.\n",nbytes);
       if(nbytes <= 0) {
 	fprintf(stderr,"Error on Antprop socket, return value = %d\n",nbytes);
 	continue;
@@ -192,24 +192,28 @@ int main(int argc, char** argv)
       }
     }
 
+    /*
     //Alert socket
     if(FD_ISSET(alertsock,&readfds)) {
       nbytes = MultiCastReceive(alertsock, msg, MSGMAXSIZE, from);
-      fprintf(stderr,"Received %d bytes from Alert multicast.\n",nbytes);
+      //fprintf(stderr,"Received %d bytes from Alert multicast.\n",nbytes);
       if(nbytes <= 0) {
 	fprintf(stderr,"Error on Alert socket, return value = %d\n",nbytes);
 	continue;
       }
 
       parseAlertDocument(&A, msg);
-      printAlertDocument(&A);
-      sprintf(scaninfofile,"%f.alert.txt",A.timeStamp);
-      sfd = fopen(scaninfofile,"w");
-      fprintAlertDocument(&A,sfd);
-      fclose(sfd);
-      
+      //if((strcmp(A.monitorName,"ELPosError") == 0 || strcmp(A.monitorName,"AZPosError") == 0) && A.alertState == 1) {
+      if(strcmp(A.monitorName,"ELPosError") == 0 || strcmp(A.monitorName,"AZPosError") == 0) {
+	printAlertDocument(&A);
+	printf("alertState = %d\n", A.alertState);
+	sprintf(scaninfofile,"%f.alert.txt",A.timeStamp);
+	sfd = fopen(scaninfofile,"w");
+	fprintAlertDocument(&A,sfd);
+	fclose(sfd);
+      }
     }
-
+    */
 
     /*
     if(FD_ISSET(heimdall.rqst,&readfds)) {
@@ -225,5 +229,7 @@ int main(int argc, char** argv)
   //perror("send");
   //if(send(cr.svc, cmdquit, strlen(cmdquit),0) == -1)
   //  perror("send");
+
+  //close multicast sockets
   
 }

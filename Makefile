@@ -1,5 +1,5 @@
-INCDIR = /users/vlitenrl/src/psrdada/src
-LIBDIR = /users/vlitenrl/src/psrdada/src
+INCDIR = /users/vlitenrl/home/src/psrdada/src
+#LIBDIR = /users/vlitenrl/home/src/psrdada/src
 FLAGS = -g
 INCDIFXMESSAGE = /users/vlitenrl/src/difxmessage-2.4.0
 

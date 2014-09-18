@@ -8,6 +8,11 @@
 #include <sys/errno.h>   /* defines ERESTART, EINTR */
 //#include <sys/wait.h>    /* defines WNOHANG, for wait() */
 //#include <unistd.h>
+#include <linux/if_packet.h>
+#include <linux/if.h>
+#include <linux/if_ether.h>
+#include <linux/if_arp.h>
+#include <sys/ioctl.h>
 
 #include "Connection.h"
 #include "def.h"
@@ -274,4 +279,72 @@ void disconn(Connection *c)
 	printf("disconn()\n");
 	//shutdown(fd, 2);    /* 2 means future sends & receives are disallowed */
 	shutdown(c->svc,2);
+}
+
+
+/* adapted from http://www.cs.rutgers.edu/~pxk/417/notes/sockets/udp.html */
+/* From rawrx.c by Walter Brisken */
+int openRawSocket(const char *device, int *deviceIndex)
+{
+	int s, v;
+	struct ifreq ifr;
+	struct sockaddr_ll sll;
+	int n = 16*1024*1024;
+
+	s = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+	if(s < 0)
+	{
+		return -1;
+	}
+
+	setsockopt(s, SOL_SOCKET, SO_RCVBUF, &n, sizeof(n));
+
+	strncpy(ifr.ifr_name, device, IFNAMSIZ);
+	if(ioctl(s, SIOCGIFINDEX, &ifr) == -1)
+	{
+		close(s);
+
+		return -3;
+	}
+
+	/* is the interface up? */
+	ioctl(s, SIOCGIFFLAGS, &ifr);
+	if( (ifr.ifr_flags & IFF_UP) == 0)
+	{
+        	close(s);
+
+		return -5;
+	}
+
+	ifr.ifr_flags |= IFF_PROMISC;
+	if (ioctl (s, SIOCSIFFLAGS, &ifr) == -1)
+	{
+        	close(s);
+
+		return -6;
+	}
+
+	ioctl(s, SIOCGIFINDEX, &ifr);
+	
+	if(deviceIndex)
+	{
+		*deviceIndex = ifr.ifr_ifindex;
+	}
+	
+	if(device)
+	{
+		sll.sll_family = AF_PACKET;
+		sll.sll_ifindex = ifr.ifr_ifindex;
+		sll.sll_protocol = htons(ETH_P_ALL);
+
+		v = bind(s, (struct sockaddr *)&sll, sizeof(sll));
+		if(v < 0)
+		{
+			close(s);
+
+			return -4;
+		}
+	}
+
+	return s;
 }
