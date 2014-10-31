@@ -6,6 +6,7 @@
 #include "dada_def.h"
 #include "Connection.h"
 #include "def.h"
+#include "vdifio.h"
 
 //For now, instead of writing to output ring buffer or internal channelizer buffer
 char outfile[] = "test.fil";
@@ -22,9 +23,10 @@ int main(int argc, char** argv)
   ipcio_t data_block = IPCIO_INIT;
   key_t key = DADA_DEFAULT_BLOCK_KEY;
   int status = 0, port = READER_SERVICE_PORT, arg;
+  char src[SRCMAXSIZE];
 
-  FILE *outfd;
-  int BUFSIZE = 10*VDIF_PKT_SIZE;
+  //FILE *outfd;
+  int BUFSIZE = VDIF_PKT_SIZE;
   char buf[BUFSIZE];
   int nbytes = 0;
 
@@ -60,11 +62,13 @@ int main(int argc, char** argv)
     }
   }
 
+  /*
   if((outfd = fopen(outfile, "w")) == NULL) {
     fprintf(stderr,"Could not open file %s\n",outfile);
     exit(1);
   }
-  
+  */  
+
   if(ipcio_connect(&data_block,key) < 0)
     exit(1);
   fprintf(stderr,"after ipcio_connect\n");
@@ -76,19 +80,23 @@ int main(int argc, char** argv)
   }
   
   //enter started state immediately
+  /*
   state = STATE_STARTED;
   if(ipcio_open(&data_block,'R') < 0)
     exit(1);
   fprintf(stderr,"after ipcio_open, R\n");
+  */
 
-  ii = 0;
+  sprintf(src,"NONE");
+
+  //ii = 0;
   while(1) {
-    ii++;
-    printf("ii: %d state: %d cmd: %d\n",ii,state,cmd);
+    //ii++;
+    //printf("ii: %d state: %d cmd: %d\n",ii,state,cmd);
 
     if(state == STATE_STOPPED) {
       if(cmd == CMD_NONE) {
-	cmd = wait_for_cmd(&c);
+	cmd = wait_for_cmd(&c,src);
 	if(cmd == CMD_EVENT) {
 	  fprintf(stderr,"Reader: ignored cmd event.\n");
 	  cmd = CMD_NONE;
@@ -100,7 +108,7 @@ int main(int argc, char** argv)
 	state = STATE_STARTED;
 	if(ipcio_open(&data_block,'R') < 0)
 	  exit(1);
-	fprintf(stderr,"after ipcio_open, W\n");
+	fprintf(stderr,"after ipcio_open, R\n");
 	cmd = CMD_NONE;
       }
       else if(cmd == CMD_STOP) {
@@ -145,22 +153,30 @@ int main(int argc, char** argv)
       }
 
       nbytes = ipcio_read(&data_block,buf,BUFSIZE);
-      fprintf(stderr,"ipcio_read: %d bytes\n",nbytes);
-    
+      //fprintf(stderr,"ipcio_read: %d bytes\n",nbytes);
+      //print VDIF frame header summary
+      //printVDIFHeader((vdif_header *)buf, VDIFHeaderPrintLevelColumns);
+      //printVDIFHeader((vdif_header *)buf, VDIFHeaderPrintLevelShort);
+      //fflush(stdout);
+      
+      /*
       status = fwrite(buf,1,nbytes,outfd);
       fprintf(stderr,"fwrite: %d bytes\n",status);
+      */
 
       //ipcio_read waits if there's no EOD (end of data) written to the last unfilled subblock, so this condition is only met on EOD:
       if(nbytes < BUFSIZE) {
 	fprintf(stderr,"Reader: EOD found.\n");
+
 	if(ipcio_close(&data_block) < 0)
 	  exit(1);
 	fprintf(stderr,"after ipcio_close\n");
 	state = STATE_STOPPED;
+	
       }
     }
   }
 
-  fclose(outfd);
+  //fclose(outfd);
   return 0;
 }

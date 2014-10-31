@@ -120,34 +120,39 @@ int wait_for_cmd(Connection* c, char *src)
 
     //telnet sends 2 invisible characters; null terminate to get rid of them
     //(won't be necessary in real operation)
-    //c->buf[nbytes-2] = '\0';
+    c->buf[nbytes-2] = '\0';
     
     //terminate string for comparisons (is strncmp better?)
-    c->buf[nbytes] = '\0';
+    //c->buf[nbytes] = '\0';
 
     if(strncmp(c->buf,"start",5) == 0) {
       printf("start received\n");
       n = strlen(c->buf);
+      fprintf(stderr,"n from strlen: %d\n",n);
       end = c->buf + n;
       tmp = c->buf + 5;
-      
+
+      fprintf(stderr,"after end/tmp, c->buf: %s\n",c->buf);
       while(isspace(*tmp) && tmp != end) {
 	tmp++;
       }
+      fprintf(stderr,"after while, c->buf: %s\n",c->buf);
+
       strcpy(src,tmp); //assumes received string contains 'start [src]' only
-      printf("source name: %s\n",src);
+      fprintf(stderr,"source name: %s\n",src);
+      fprintf(stderr,"c->buf: %s\n",c->buf);
       return CMD_START;
     }
-    else if (strcmp(c->buf,"stop") == 0) {
+    else if (strncmp(c->buf,"stop",4) == 0) {
       printf("stop received\n");
       return CMD_STOP;
     }
-    else if (strcmp(c->buf,"quit") == 0) {
+    else if (strncmp(c->buf,"quit",4) == 0) {
       printf("quit received\n");
       return CMD_QUIT;
     }
     //have to make sure only Writer can get to this:
-    else if (strcmp(c->buf,"event") == 0) {
+    else if (strncmp(c->buf,"event",5) == 0) {
       printf("event received\n");
       return CMD_EVENT;
     }

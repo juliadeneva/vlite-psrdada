@@ -1,11 +1,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
 
 #include "dada_def.h"
 #include "ipcio.h"
 #include "Connection.h"
 #include "def.h"
+#include "vdifio.h"
 
 //Instead of reading from socket, for now
 char infile[] = "2011-01-15-16:56:35.fil";
@@ -24,7 +26,7 @@ int main(int argc, char** argv)
   key_t key = DADA_DEFAULT_BLOCK_KEY;
   int status = 0;
 
-  char eventfile[128], src[SRCMAXSIZE];;
+  char eventfile[128], src[SRCMAXSIZE];
   FILE *infd, *evfd;
 
   //get this many bytes at a time from data socket
@@ -46,6 +48,20 @@ int main(int argc, char** argv)
   Connection raw;
   raw.alen = sizeof(raw.rem_addr);
   raw.sockoptval = 32*1024*1024; //size of data socket internal buffer
+
+  // For gathering stats on frame skips
+  long framenumtmp, framenum[2], framediff;
+  framenum[0] = -1;
+  framenum[1] = -1;
+  int threadid = -1; 
+  FILE* skiplogfd;
+  time_t currt;
+  char currt_string[128];
+  struct tm *tmpt;
+  if((skiplogfd = fopen("skiplog.txt", "w")) == NULL) {
+    fprintf(stderr,"Writer: Could not open skiplog file \n");
+    exit(1);
+  }
 
   while ((arg = getopt(argc, argv, "hk:p:")) != -1) {
     switch(arg) {
@@ -99,14 +115,14 @@ int main(int argc, char** argv)
   if(raw.svc > maxsock)
     maxsock = raw.svc;
 
-  ii = 0;
+  //ii = 0;
   sprintf(src,"NONE");
 
   //in final version, this loop will be while(1)
   //while(!feof(infd)) {
   while(1) {
-    ii++;
-    printf("ii: %d state: %d cmd: %d\n",ii,state,cmd);
+    //ii++;
+    //printf("ii: %d state: %d cmd: %d\n",ii,state,cmd);
 
     if(state == STATE_STOPPED) {
       if(cmd == CMD_NONE)
@@ -120,7 +136,12 @@ int main(int argc, char** argv)
 	cmd = CMD_NONE;
       }
       else if(cmd == CMD_EVENT) {
-	sprintf(eventfile,"%s_event_%04d.out",src,eventcount);
+	currt = time(NULL);
+	tmpt = localtime(&currt);
+	strftime(currt_string,sizeof(currt_string), "%Y%m%d_%H%M%S", tmpt);
+	*(currt_string+15) = 0;
+	sprintf(eventfile,"%s_%s_ev_%04d.out",currt_string,src,eventcount);
+	
 	if((evfd = fopen(eventfile,"w")) == NULL) {
 	  fprintf(stderr,"Writer: Could not open file %s for writing.\n",eventfile);
 	  exit(1);
@@ -139,7 +160,7 @@ int main(int argc, char** argv)
       }
     }
     
-    //if state is STARTED, poll the command listening socket (in final version, select() will poll both the command listening socket and the data socket)
+    //if state is STARTED, poll the command listening socket and the VDIF raw data socket
     if(state == STATE_STARTED) {
       FD_ZERO(&readfds);
       FD_SET(c.rqst, &readfds);
@@ -158,7 +179,12 @@ int main(int argc, char** argv)
 	fprintf(stderr,"after ipcio_close\n");
 	
 	//dump DB to file
-	sprintf(eventfile,"%s_event_%04d.out",src,eventcount);
+	currt = time(NULL);
+	tmpt = localtime(&currt);
+	strftime(currt_string,sizeof(currt_string), "%Y%m%d_%H%M%S", tmpt);
+	*(currt_string+15) = 0;
+	sprintf(eventfile,"%s_%s_ev_%04d.out",currt_string,src,eventcount);
+	
 	if((evfd = fopen(eventfile,"w")) == NULL) {
 	  fprintf(stderr,"Writer: Could not open file %s for writing.\n",eventfile);
 	  exit(1);
@@ -199,14 +225,40 @@ int main(int argc, char** argv)
 	if(nbytes == BUFSIZE) {
 	  //fwrite(buf + trim, recvlen-trim, 1, out);
 	  status = ipcio_write(&data_block,buf+UDP_HDR_SIZE,VDIF_PKT_SIZE);
-	  fprintf(stderr,"ipcio_write: %d bytes\n",status);
+	  //fprintf(stderr,"ipcio_write: %d bytes\n",status);
+
+	  //print VDIF frame header
+	  //printVDIFHeader((vdif_header *)(buf+UDP_HDR_SIZE), VDIFHeaderPrintLevelLong);
+	  //printVDIFHeader((vdif_header *)(buf+UDP_HDR_SIZE), VDIFHeaderPrintLevelColumns);
+	  //printVDIFHeader((vdif_header *)(buf+UDP_HDR_SIZE), VDIFHeaderPrintLevelShort);
+	  //fprintf(stderr,"VDIFFrame MJD: %d Number: %d\n",getVDIFFrameMJD((vdif_header *)(buf+UDP_HDR_SIZE)), getVDIFFrameNumber((vdif_header *)(buf+UDP_HDR_SIZE)));
+	  framenumtmp = getVDIFFrameNumber((vdif_header *)(buf+UDP_HDR_SIZE));
+	  threadid = getVDIFThreadID((vdif_header *)(buf+UDP_HDR_SIZE));
+	  framediff = framenumtmp - framenum[threadid];
+
+	  if(framediff != -25599 && abs(framediff) > 1 && framenum[threadid] != -1) {
+	    currt = time(NULL);
+	    tmpt = localtime(&currt);
+	    strftime(currt_string,sizeof(currt_string), "%Y-%m-%d %H:%M:%S", tmpt);
+	    fprintf(skiplogfd,"%s FRAME SKIP FROM %d to %d (THREAD %d)\n",currt_string,framenum[threadid],framenumtmp,threadid);
+	    fflush(skiplogfd);
+	  }
+	  else if(framenum[threadid] == -1) {
+	    
+	    fprintf(skiplogfd,"Writer: Thread %d First frame: %d\n",threadid,framenumtmp);
+	    fflush(skiplogfd);
+	  }
+
+	  framenum[threadid] = framenumtmp;
+
 	}
 	else if(nbytes <= 0) {
 	  fprintf(stderr,"Raw socket read failed: %d\n.", nbytes);
 	}
+	/*
 	else 
-	  fprintf(stderr,"Received packet size: %d\n, ignoring.", nbytes);
-	
+	  fprintf(stderr,"Received packet size: %d, ignoring.\n", nbytes);
+	*/
       }
  
       //XXX: check for overflow of the data block here?
@@ -215,7 +267,7 @@ int main(int argc, char** argv)
       //status = ipcio_write(&data_block,buf,nbytes);
       //fprintf(stderr,"ipcio_write: %d bytes\n",status);
       
-      sleep(2);
+      //sleep(2);
     }
   }
   
