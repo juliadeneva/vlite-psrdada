@@ -17,7 +17,7 @@ int main(int argc, char** argv)
   FILE *infd, *outfd;
   long framediff, threadid, framenum[2], framenumtmp, framecount = 0;
   char buf[VDIF_PKT_SIZE];
-  long framedisc; //after what framecount is the discontinuity
+  long framedisc,tmp; //after what framecount is the discontinuity
   int numdisc[2]; // how many discontinuities for each threadid
   
   if(argc != 2) {
@@ -40,30 +40,35 @@ int main(int argc, char** argv)
 
   //Go through the file, check for skipped frames and find the ring buffer wrap discontinuity
   while(!feof(infd)) {
-    fread(buf,VDIF_PKT_SIZE,1,infd);
-    
+
+    if(fread(buf,VDIF_PKT_SIZE,1,infd) == 0)
+      break;
+      //printf("fread returned zero, framecount = %ld\n",framecount);
+
     framenumtmp = getVDIFFrameNumber((vdif_header *)buf);
     threadid = getVDIFThreadID((vdif_header *)buf);
     framediff = framenumtmp - framenum[threadid];
+    //printf("framediff: %d\n",framediff);
+    //printf("%d  %ld  %ld\n",threadid,framenumtmp,framecount);
 
-    if(framediff != -25599 && abs(framediff) > 1 && framenum[threadid] != -1) {
-      fprintf(stderr,"At framecount=%ld, FRAME SKIP FROM %d to %d (THREAD %d)\n",framecount,framenum[threadid],framenumtmp,threadid);
+    if(framediff != -MAXFRAMENUM && framenum[threadid] != -1 && framediff != 1) {
+      fprintf(stderr,"At framecount=%ld, FRAME SKIP FROM %ld to %ld (THREAD %d)\n",framecount,framenum[threadid],framenumtmp,threadid);
       numdisc[threadid]++;
       
       if(framedisc == -1)
 	framedisc = framecount;
     }
     else if(framenum[threadid] == -1) {
-      fprintf(stderr,"db_unwrap: Thread %d First frame: %d\n",threadid,framenumtmp);
+      fprintf(stderr,"db_unwrap: Thread %d First frame: %ld\n",threadid,framenumtmp);
     }
     
     framenum[threadid] = framenumtmp;
     framecount++;
   }
 
-  printf("Total: framecount = %ld\n",framecount);
-  printf("framedisc = %ld\n",framedisc);
-  printf("Numdisc[0],[1] = %d, %d\n",numdisc[0],numdisc[1]);
+  printf("Total framecount = %ld\n",framecount);
+  printf("Frame discontinuity at framenum = %ld\n",framedisc);
+  printf("Total discontinuities for threads [0],[1] = %d, %d\n",numdisc[0],numdisc[1]);
 
   if(numdisc[0] > 1 || numdisc[1] > 1) {
     fprintf(stderr,"File %s has more than one discontinuity per polarization; most likely corrupted.\n", argv[1]);
@@ -85,7 +90,8 @@ int main(int argc, char** argv)
   //Copy data from framedisc onwards into output file
   fseek(infd,framedisc*VDIF_PKT_SIZE,SEEK_SET);
   while(!feof(infd)) {
-    fread(buf,VDIF_PKT_SIZE,1,infd);
+    if(fread(buf,VDIF_PKT_SIZE,1,infd) == 0)
+      break;
     fwrite(buf,VDIF_PKT_SIZE,1,outfd);
   }
 

@@ -6,7 +6,7 @@
 #define MAXHOSTNAME 128
 
 #define WRITER_SERVICE_PORT  30001
-#define READER_SERVICE_PORT  30002
+#define READER_SERVICE_PORT  40001
 
 typedef struct {
   int svc;        /* listening socket providing service */

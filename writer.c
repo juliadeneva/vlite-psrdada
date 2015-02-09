@@ -16,7 +16,9 @@ void usage ()
 {
   fprintf(stdout,"Usage: writer [options]\n"
 	  "-k hexadecimal shared memory key  (default: %x)\n"
-	  "-p listening port number (default: %d)\n",DADA_DEFAULT_BLOCK_KEY,WRITER_SERVICE_PORT);
+	  "-p listening port number (default: %"PRIu64")\n"
+	  "-e ethernet device id (default: eth0)\n"
+	  ,DADA_DEFAULT_BLOCK_KEY,WRITER_SERVICE_PORT);
 }
 
 
@@ -32,8 +34,10 @@ int main(int argc, char** argv)
   //get this many bytes at a time from data socket
   int BUFSIZE = UDP_HDR_SIZE + VDIF_PKT_SIZE; 
   char buf[BUFSIZE];
+  char dev[16] = ETHDEV;
 
-  int nbytes = 0, eventcount = 0, state = STATE_STOPPED, port = WRITER_SERVICE_PORT;
+  int nbytes = 0, eventcount = 0, state = STATE_STOPPED;
+  uint64_t port = WRITER_SERVICE_PORT;
   int cmd = CMD_NONE, ii, arg, maxsock = 0; 
   
   fd_set readfds;
@@ -44,7 +48,6 @@ int main(int argc, char** argv)
   Connection c;
   c.sockoptval = 1; //release port immediately after closing connection
 
-  char dev[] = "eth0";
   Connection raw;
   raw.alen = sizeof(raw.rem_addr);
   raw.sockoptval = 32*1024*1024; //size of data socket internal buffer
@@ -55,21 +58,18 @@ int main(int argc, char** argv)
   framenum[1] = -1;
   int threadid = -1; 
   FILE* skiplogfd;
+  char skiplogfile[128];
   time_t currt;
   char currt_string[128];
   struct tm *tmpt;
-  if((skiplogfd = fopen("skiplog.txt", "w")) == NULL) {
-    fprintf(stderr,"Writer: Could not open skiplog file \n");
-    exit(1);
-  }
 
-  while ((arg = getopt(argc, argv, "hk:p:")) != -1) {
+  while ((arg = getopt(argc, argv, "hk:p:e:")) != -1) {
     switch(arg) {
 
     case 'h':
       usage ();
       return 0;
-
+      
     case 'k':
       if (sscanf (optarg, "%x", &key) != 1) {
 	fprintf (stderr, "writer: could not parse key from %s\n", optarg);
@@ -83,7 +83,21 @@ int main(int argc, char** argv)
 	return -1;
       }
       break;
+    
+    case 'e':
+      if (sscanf (optarg, "%s", dev) != 1) {
+	fprintf (stderr, "writer: could not parse ethernet device from %s\n", optarg);
+	return -1;
+      }
+      break;
+      
     }
+  }
+
+  sprintf(skiplogfile,"%s%s%s","skiplog-",dev,".txt");
+  if((skiplogfd = fopen(skiplogfile, "w")) == NULL) {
+    fprintf(stderr,"Writer: Could not open skiplog file %s\n",skiplogfile);
+    exit(1);
   }
 
   /*
@@ -136,6 +150,8 @@ int main(int argc, char** argv)
 	cmd = CMD_NONE;
       }
       else if(cmd == CMD_EVENT) {
+
+	/*
 	currt = time(NULL);
 	tmpt = localtime(&currt);
 	strftime(currt_string,sizeof(currt_string), "%Y%m%d_%H%M%S", tmpt);
@@ -149,9 +165,13 @@ int main(int argc, char** argv)
 	event_to_file(&data_block,evfd);
 	fclose(evfd);
 	eventcount++;
+	*/
+
+	fprintf(stderr, "Writer: ignored CMD_EVENT in STATE_STOPPED.\n");
 	cmd = CMD_NONE;
       }
       else if(cmd == CMD_STOP) {
+	fprintf(stderr, "Writer: ignored CMD_STOP in STATE_STOPPED.\n");
 	cmd = CMD_NONE;
       }
       else if(cmd == CMD_QUIT) {
@@ -192,6 +212,14 @@ int main(int argc, char** argv)
 	event_to_file(&data_block,evfd);
 	fclose(evfd);
 	eventcount++;
+
+	//Flush out and ignore pending commands as they are out of date, then resume writing to ring buffer
+	FD_ZERO(&readfds);
+	FD_SET(c.rqst, &readfds);
+	if(FD_ISSET(c.rqst,&readfds)) {
+	  cmd = wait_for_cmd(&c,src);
+	  fprintf(stderr,"Writer: flushed out command socket after event_to_file.");
+	}
 	
 	state = STATE_STOPPED;
 	cmd = CMD_START; 
@@ -216,7 +244,10 @@ int main(int argc, char** argv)
 	shutdown(c.rqst,2);
 	return 0;
       }
-      //XXX: what if command is start before a stop is received? 
+      else if(cmd == CMD_START) {
+	fprintf(stderr,"Writer: ignored cmd start (already started).\n");
+	cmd = CMD_NONE;
+      }
       
       //read a packet from the data socket and write it to the ring buffer
       if(FD_ISSET(raw.svc,&readfds)) {
@@ -236,7 +267,8 @@ int main(int argc, char** argv)
 	  threadid = getVDIFThreadID((vdif_header *)(buf+UDP_HDR_SIZE));
 	  framediff = framenumtmp - framenum[threadid];
 
-	  if(framediff != -25599 && abs(framediff) > 1 && framenum[threadid] != -1) {
+	  if(framediff != -MAXFRAMENUM && framenum[threadid] != -1 && framediff != 1) {
+	  //if(framediff != -25599 && abs(framediff) > 1 && framenum[threadid] != -1) {
 	    currt = time(NULL);
 	    tmpt = localtime(&currt);
 	    strftime(currt_string,sizeof(currt_string), "%Y-%m-%d %H:%M:%S", tmpt);

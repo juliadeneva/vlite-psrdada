@@ -12,4 +12,6 @@
 
 #define SRCMAXSIZE 32
 
+#define ETHDEV "eth0"
 
+#define MAXFRAMENUM 25599

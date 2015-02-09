@@ -22,6 +22,9 @@ char obsinfogrp[] = "239.192.3.2";
 char antpropgrp[] = "239.192.3.1";
 char alertgrp[] = "239.192.2.3";
 
+//for tests
+char hostname[] = "vlite-difx2.evla.nrao.edu";
+
 void usage ()
 {
   fprintf(stdout,"Usage: messenger\n");
@@ -32,6 +35,7 @@ void usage ()
 int main(int argc, char** argv)
 {
   char cmdstop[] = "stop";
+  char cmdevent[] = "event";
   char cmdquit[] = "quit";
   char cmdstart[32]; //this will be of the form 'start <src>'
 
@@ -107,26 +111,20 @@ int main(int argc, char** argv)
   //XXX: open a listening socket for Heimdall, wait for connection
   
   //connect to writer; writer is in STATE_STOPPED by default
-  /*
   if(conn(hostname,WRITER_SERVICE_PORT,&cw) < 0) {
     fprintf(stderr,"Messenger: could not connect to Writer.\n");
     exit(1);
   }
-  */
 
-  //connect to reader; reader is in STATE_STARTED by default
-  /*
+  //connect to reader; reader is in STATE_STOPPED by default
   if(conn(hostname,READER_SERVICE_PORT,&cr) < 0 ) {
     fprintf(stderr,"Messenger: could not connect to Reader.\n");
     exit(1);
   }
-  */
 
   while(1) {
     /* From Walter: The antprop message comes whenever a new scheduling block starts and at each UT midnight (where EOP values might change). Observation document happens before each new scan and a FINISH document at the end of a scheduling block. At the beginning of the scheduling block the antprop document always precedes the observation document.
      */
-
-    //fprintf(stderr,"Waiting for multicast message...\n");
 
     //Blocking select() on multicast sockets and Heimdall event trigger socket
     //Have to call FS_SET on each socket before calling select()
@@ -134,6 +132,8 @@ int main(int argc, char** argv)
     FD_SET(obsinfosock, &readfds);
     FD_SET(antpropsock, &readfds);
     //FD_SET(alertsock, &readfds);
+
+    printf("Waiting for multicast messages...\n");
     select(maxnsock+1,&readfds,NULL,NULL,NULL);
     
     //Obsinfo socket
@@ -152,22 +152,41 @@ int main(int argc, char** argv)
 	od = &(D.data.observation);
 	strcpy(src,od->name);
 	//printf("src: %s\n",src);
+
 	sprintf(scaninfofile,"%s.obsinfo.%04d.%04d.txt",od->datasetId,od->scanNo,od->subscanNo);
 	sfd = fopen(scaninfofile,"w");
 	fprintScanInfoDocument(&D,sfd);
 	fclose(sfd);
 
-	/*
 	if (strcasecmp(src,"FINISH") == 0) {
-	  if (send(cw.svc, cmdstop, strlen(cmdstop), 0) == -1)
+	  if (send(cw.svc, cmdstop, strlen(cmdstop)+1, 0) == -1)
 	    perror("send");
 	}
-	else {
+	//else {
+	else if(strstr(src,"B0329+54") != NULL || strstr(src,"B0531+21") != NULL || strstr(src,"B0950+08") != NULL || strstr(src,"B0833-45") != NULL || strstr(src,"B1749-28") != NULL || strstr(src,"J0437-4715") != NULL) {
 	  sprintf(cmdstart,"start %s",src);
-	  if (send(cw.svc, cmdstart, strlen(cmdstart), 0) == -1)
-	    perror("send");	  
+	  if (send(cr.svc, cmdstart, strlen(cmdstart)+1, 0) == -1)
+	    perror("send");
+	  if (send(cw.svc, cmdstart, strlen(cmdstart)+1, 0) == -1)
+	    perror("send");
+
+	  sleep(60); //let the ring buffer fill
+	  
+	  if (send(cw.svc, cmdevent, strlen(cmdevent)+1, 0) == -1)
+	    perror("send");
+
+	  //so that the EVENT and STOP commands aren't received as one string
+	  //sleep(2); 
+
+	  //Writer will restart immediately after the EVENT is dumped to file, so stop it in order to capture only one data snippet per observation
+	  //if (send(cw.svc, cmdstop, strlen(cmdstop)+1, 0) == -1)
+	  //  perror("send");
+
+	  //Reader is in STATE_STOPPED after CMD_EVENT was sent to Writer, because Writer wrote an EOD to the ring buffer; need to restart it
+	  //if (send(cr.svc, cmdstart, strlen(cmdstart), 0) == -1)
+	  //  perror("send");
 	}
-	*/
+
       }
     }
 
@@ -185,10 +204,12 @@ int main(int argc, char** argv)
       printf("Message type: %d = %s\n",D.type,ScanInfoTypeString[D.type]);
       if(D.type == SCANINFO_ANTPROP) {
 	ap = &(D.data.antProp);
+
 	sprintf(scaninfofile,"%s.antprop.txt",ap->datasetId);
 	sfd = fopen(scaninfofile,"w");
 	fprintScanInfoDocument(&D,sfd);
 	fclose(sfd);
+
       }
     }
 

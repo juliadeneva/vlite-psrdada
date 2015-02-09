@@ -15,14 +15,15 @@ void usage ()
 {
   fprintf(stdout,"Usage: reader [options]\n"
 	  "-k hexadecimal shared memory key  (default: %x)\n"
-	  "-p listening port number (default: %d)\n",DADA_DEFAULT_BLOCK_KEY,READER_SERVICE_PORT);
+	  "-p listening port number (default: %"PRIu64")\n",DADA_DEFAULT_BLOCK_KEY,READER_SERVICE_PORT);
 }
 
 int main(int argc, char** argv)
 {
   ipcio_t data_block = IPCIO_INIT;
   key_t key = DADA_DEFAULT_BLOCK_KEY;
-  int status = 0, port = READER_SERVICE_PORT, arg;
+  int status = 0, arg;
+  uint64_t port = READER_SERVICE_PORT;
   char src[SRCMAXSIZE];
 
   //FILE *outfd;
@@ -88,35 +89,37 @@ int main(int argc, char** argv)
   */
 
   sprintf(src,"NONE");
-
+  
   //ii = 0;
   while(1) {
     //ii++;
-    //printf("ii: %d state: %d cmd: %d\n",ii,state,cmd);
+    //printf("state: %d cmd: %d\n",state,cmd);
 
     if(state == STATE_STOPPED) {
-      if(cmd == CMD_NONE) {
+      
+      if(cmd == CMD_NONE)
 	cmd = wait_for_cmd(&c,src);
-	if(cmd == CMD_EVENT) {
-	  fprintf(stderr,"Reader: ignored cmd event.\n");
-	  cmd = CMD_NONE;
-	  continue;
-	}
-      }
 
       if(cmd == CMD_START) {
 	state = STATE_STARTED;
+	fprintf(stderr,"before ipcio_open\n");
 	if(ipcio_open(&data_block,'R') < 0)
 	  exit(1);
 	fprintf(stderr,"after ipcio_open, R\n");
 	cmd = CMD_NONE;
       }
       else if(cmd == CMD_STOP) {
+	fprintf(stderr,"Reader: ignored cmd stop (already stopped).\n");
 	cmd = CMD_NONE;
       }
       else if(cmd == CMD_QUIT) {
 	shutdown(c.rqst,2);
 	return 0;
+      }
+      else if(cmd == CMD_EVENT) {
+	fprintf(stderr,"Reader: ignored cmd event.\n");
+	cmd = CMD_NONE;
+	continue;
       }
     }
 
@@ -126,13 +129,8 @@ int main(int argc, char** argv)
       select(c.rqst+1,&readfds,NULL,NULL,&tv);
       
       //if input is waiting on listening socket, read it
-      if(FD_ISSET(c.rqst,&readfds)) {
-	cmd = wait_for_cmd(&c);
-	if(cmd == CMD_EVENT) {
-	  fprintf(stderr,"Reader: ignored cmd event.\n");
-	  cmd = CMD_NONE;
-	}
-      }
+      if(FD_ISSET(c.rqst,&readfds))
+	cmd = wait_for_cmd(&c, src);
       
       //if command is stop, change state to STOPPED, close data block
       if(cmd == CMD_STOP) {
@@ -151,14 +149,23 @@ int main(int argc, char** argv)
 	shutdown(c.rqst,2);
 	return 0;
       }
-
+      else if(cmd == CMD_EVENT) {
+	fprintf(stderr,"Reader: ignored cmd event.\n");
+	cmd = CMD_NONE;
+      }
+      else if(cmd == CMD_START) {
+	fprintf(stderr,"Reader: ignored cmd start (already started).\n");
+	cmd = CMD_NONE;
+      }
+    
       nbytes = ipcio_read(&data_block,buf,BUFSIZE);
       //fprintf(stderr,"ipcio_read: %d bytes\n",nbytes);
       //print VDIF frame header summary
       //printVDIFHeader((vdif_header *)buf, VDIFHeaderPrintLevelColumns);
       //printVDIFHeader((vdif_header *)buf, VDIFHeaderPrintLevelShort);
       //fflush(stdout);
-      
+      //fprintf(stderr,"VDIFFrame MJD: %d Number: %d\n",getVDIFFrameMJD((vdif_header *)buf), getVDIFFrameNumber((vdif_header *)buf));
+
       /*
       status = fwrite(buf,1,nbytes,outfd);
       fprintf(stderr,"fwrite: %d bytes\n",status);

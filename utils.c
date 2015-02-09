@@ -110,7 +110,6 @@ int wait_for_cmd(Connection* c, char *src)
 
     //read from socket (blocking); is it better to use recv()?
     nbytes = read(c->rqst,c->buf,MAXINBUFSIZE);
-    sleep(2);
     printf("wait_for_cmd: read %d bytes: %.*s\n",nbytes,nbytes,c->buf);
 
     if(nbytes == 0) {
@@ -120,10 +119,12 @@ int wait_for_cmd(Connection* c, char *src)
 
     //telnet sends 2 invisible characters; null terminate to get rid of them
     //(won't be necessary in real operation)
-    c->buf[nbytes-2] = '\0';
+    //c->buf[nbytes-2] = '\0';
     
     //terminate string for comparisons (is strncmp better?)
-    //c->buf[nbytes] = '\0';
+    c->buf[nbytes] = '\0';
+
+    //XXX: If several commands are received as one string, the blocks below will only return the first! Return only the last instead?
 
     if(strncmp(c->buf,"start",5) == 0) {
       printf("start received\n");
@@ -132,15 +133,15 @@ int wait_for_cmd(Connection* c, char *src)
       end = c->buf + n;
       tmp = c->buf + 5;
 
-      fprintf(stderr,"after end/tmp, c->buf: %s\n",c->buf);
+      //fprintf(stderr,"after end/tmp, c->buf: %s\n",c->buf);
       while(isspace(*tmp) && tmp != end) {
 	tmp++;
       }
-      fprintf(stderr,"after while, c->buf: %s\n",c->buf);
+      //fprintf(stderr,"after while, c->buf: %s\n",c->buf);
 
       strcpy(src,tmp); //assumes received string contains 'start [src]' only
       fprintf(stderr,"source name: %s\n",src);
-      fprintf(stderr,"c->buf: %s\n",c->buf);
+      //fprintf(stderr,"c->buf: %s\n",c->buf);
       return CMD_START;
     }
     else if (strncmp(c->buf,"stop",4) == 0) {
