@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "dada_def.h"
 #include "ipcio.h"
@@ -35,7 +36,10 @@ int main(int argc, char** argv)
   int BUFSIZE = UDP_HDR_SIZE + VDIF_PKT_SIZE; 
   char buf[BUFSIZE];
   char dev[16] = ETHDEV;
-
+  char hostname[MAXHOSTNAME];
+  gethostname(hostname,MAXHOSTNAME);
+  char *starthost = strstr(hostname, "difx");
+  
   int nbytes = 0, eventcount = 0, state = STATE_STOPPED;
   uint64_t port = WRITER_SERVICE_PORT;
   int cmd = CMD_NONE, ii, arg, maxsock = 0; 
@@ -94,7 +98,7 @@ int main(int argc, char** argv)
     }
   }
 
-  sprintf(skiplogfile,"%s%s%s","skiplog-",dev,".txt");
+  sprintf(skiplogfile,"%s%s%s%s","skiplog-",starthost,dev,".txt");
   if((skiplogfd = fopen(skiplogfile, "w")) == NULL) {
     fprintf(stderr,"Writer: Could not open skiplog file %s\n",skiplogfile);
     exit(1);
@@ -150,23 +154,6 @@ int main(int argc, char** argv)
 	cmd = CMD_NONE;
       }
       else if(cmd == CMD_EVENT) {
-
-	/*
-	currt = time(NULL);
-	tmpt = localtime(&currt);
-	strftime(currt_string,sizeof(currt_string), "%Y%m%d_%H%M%S", tmpt);
-	*(currt_string+15) = 0;
-	sprintf(eventfile,"%s_%s_ev_%04d.out",currt_string,src,eventcount);
-	
-	if((evfd = fopen(eventfile,"w")) == NULL) {
-	  fprintf(stderr,"Writer: Could not open file %s for writing.\n",eventfile);
-	  exit(1);
-	}
-	event_to_file(&data_block,evfd);
-	fclose(evfd);
-	eventcount++;
-	*/
-
 	fprintf(stderr, "Writer: ignored CMD_EVENT in STATE_STOPPED.\n");
 	cmd = CMD_NONE;
       }
@@ -203,7 +190,7 @@ int main(int argc, char** argv)
 	tmpt = localtime(&currt);
 	strftime(currt_string,sizeof(currt_string), "%Y%m%d_%H%M%S", tmpt);
 	*(currt_string+15) = 0;
-	sprintf(eventfile,"%s_%s_ev_%04d.out",currt_string,src,eventcount);
+	sprintf(eventfile,"%s%s_%s_%s_ev_%04d.out",starthost,dev,currt_string,src,eventcount);
 	
 	if((evfd = fopen(eventfile,"w")) == NULL) {
 	  fprintf(stderr,"Writer: Could not open file %s for writing.\n",eventfile);

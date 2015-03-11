@@ -209,11 +209,12 @@ void event_to_file(const ipcio_t* db, FILE* evfd)
 
 /* Connect to a specified server and port number */
 //Adapted from http://www.cs.rutgers.edu/~pxk/417/notes/sockets/demo-03.html
-int conn(const char *host, int port, Connection *c)
+//int conn(const char *host, int port, Connection *c)
+int conn(Connection *c)
 {
   struct hostent *hp;	/* host information */
   
-  printf("conn(host=\"%s\", port=\"%d\")\n", host, port);
+  printf("conn(host=\"%s\", port=\"%d\")\n", c->hostname, c->port);
   
   /* get a tcp/ip socket */
   /* We do this as we did it for the server */
@@ -236,7 +237,7 @@ int conn(const char *host, int port, Connection *c)
   c->my_addr.sin_family = AF_INET;   /* address family */
   c->my_addr.sin_addr.s_addr = htonl(INADDR_ANY);
   c->my_addr.sin_port = htons(0);
-  strncpy(c->hostname,host,MAXHOSTNAME);
+  //strncpy(c->hostname,host,MAXHOSTNAME);
   
   if (bind(c->svc, (struct sockaddr *)&(c->my_addr), sizeof(c->my_addr)) < 0) {
     perror("bind failed");
@@ -257,12 +258,12 @@ int conn(const char *host, int port, Connection *c)
   
   memset((char*)&(c->rem_addr), 0, sizeof(c->rem_addr));
   c->rem_addr.sin_family = AF_INET;
-  c->rem_addr.sin_port = htons(port);
+  c->rem_addr.sin_port = htons(c->port);
   
   /* look up the address of the server given its name */
-  hp = gethostbyname(host);
+  hp = gethostbyname(c->hostname);
   if (!hp) {
-    fprintf(stderr, "could not obtain address of %s\n", host);
+    fprintf(stderr, "could not obtain address of %s\n", c->hostname);
     return -1;
   }
   

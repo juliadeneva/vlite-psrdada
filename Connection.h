@@ -16,5 +16,8 @@ typedef struct {
   struct sockaddr_in rem_addr;  
   int sockoptval;
   char hostname[MAXHOSTNAME]; /* host name, for debugging */  
-  char buf[MAXINBUFSIZE]; //incoming messages go here
+  char buf[MAXINBUFSIZE]; /* incoming messages go here */
+  int port; 
+  int isconnected; /* 0 if not connected, >0 if connected*/
+
 } Connection;

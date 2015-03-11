@@ -22,8 +22,11 @@ char obsinfogrp[] = "239.192.3.2";
 char antpropgrp[] = "239.192.3.1";
 char alertgrp[] = "239.192.2.3";
 
+//How many Reader/Writer pairs are there
+#define NRWPAIRS 2
+
 //for tests
-char hostname[] = "vlite-difx2.evla.nrao.edu";
+
 
 void usage ()
 {
@@ -40,9 +43,11 @@ int main(int argc, char** argv)
   char cmdstart[32]; //this will be of the form 'start <src>'
 
   //XXX: in final version, there will be an array of readers and an array of writers, so initial connection attempts as well as each command send will loop over those. (How to get port numbers for all? Specify on command line?)  
-  Connection cr, cw, heimdall;
+  Connection cr[NRWPAIRS];
+  Connection cw[NRWPAIRS];
+  char hostname[MAXHOSTNAME]; // = "vlite-difx1.evla.nrao.edu";
   fd_set readfds;
-  int obsinfosock, antpropsock, alertsock, maxnsock = 0, nbytes;
+  int obsinfosock, antpropsock, alertsock, maxnsock = 0, nbytes, ii, nhost = 0;
 
   ScanInfoDocument D; //multicast message struct
   const ObservationDocument *od;
@@ -55,6 +60,41 @@ int main(int argc, char** argv)
   char from[24]; //ip address of multicast sender
 
   FILE *sfd;
+
+  //Initialize Connections and connect to Readers/Writers: two pairs per difx host
+  for(ii=0; ii<NRWPAIRS; ii++) {
+    if(ii%2 == 0) {
+      nhost++;
+      cr[ii].port = READER_SERVICE_PORT;
+      cw[ii].port = WRITER_SERVICE_PORT;
+    }
+    else {
+      cr[ii].port = READER_SERVICE_PORT + 1;
+      cw[ii].port = WRITER_SERVICE_PORT + 1;
+    }
+    
+    sprintf(cr[ii].hostname,"vlite-difx%d.evla.nrao.edu",nhost);
+    sprintf(cw[ii].hostname,"vlite-difx%d.evla.nrao.edu",nhost);
+    cr[ii].isconnected = 0;
+    cw[ii].isconnected = 0;
+
+    printf("Reader on %s, port %d\n", cr[ii].hostname, cr[ii].port);
+    printf("Writer on %s, port %d\n", cw[ii].hostname, cw[ii].port);
+
+    if(conn(&cw[ii]) < 0) {
+      fprintf(stderr,"Messenger: could not connect to Writer on %s port %d\n", cw[ii].hostname, cw[ii].port);
+      exit(1);
+    }
+    else
+      cw[ii].isconnected = 1;
+    
+    if(conn(&cr[ii]) < 0 ) {
+      fprintf(stderr,"Messenger: could not connect to Reader on %s port %d\n", cr[ii].hostname, cr[ii].port);
+      exit(1);
+    }
+    else
+      cr[ii].isconnected = 1;
+  }
 
   //connect to VLA obsinfo multicast
   obsinfosock = openMultiCastSocket(obsinfogrp, MULTI_OBSINFO_PORT);
@@ -94,34 +134,6 @@ int main(int argc, char** argv)
   }
   */
 
-  /*
-  //connect to testvlite multicast
-  obsinfosock = openMultiCastSocket(testgrp, MULTI_TEST_PORT);
-  if(obsinfosock < 0) {
-    fprintf(stderr,"Failed to open Test multicast; openMultiCastSocket = %d\n",obsinfosock);
-    exit(1);
-  }
-  else {
-    printf("Test socket: %d\n",obsinfosock);
-    if(obsinfosock > maxnsock)
-      maxnsock = obsinfosock;
-  }
-  */
-
-  //XXX: open a listening socket for Heimdall, wait for connection
-  
-  //connect to writer; writer is in STATE_STOPPED by default
-  if(conn(hostname,WRITER_SERVICE_PORT,&cw) < 0) {
-    fprintf(stderr,"Messenger: could not connect to Writer.\n");
-    exit(1);
-  }
-
-  //connect to reader; reader is in STATE_STOPPED by default
-  if(conn(hostname,READER_SERVICE_PORT,&cr) < 0 ) {
-    fprintf(stderr,"Messenger: could not connect to Reader.\n");
-    exit(1);
-  }
-
   while(1) {
     /* From Walter: The antprop message comes whenever a new scheduling block starts and at each UT midnight (where EOP values might change). Observation document happens before each new scan and a FINISH document at the end of a scheduling block. At the beginning of the scheduling block the antprop document always precedes the observation document.
      */
@@ -158,33 +170,43 @@ int main(int argc, char** argv)
 	fprintScanInfoDocument(&D,sfd);
 	fclose(sfd);
 
+
+	// TO ADD: Check that Writers are still connected before sending; change their isonnected elements if they are not
 	if (strcasecmp(src,"FINISH") == 0) {
-	  if (send(cw.svc, cmdstop, strlen(cmdstop)+1, 0) == -1)
-	    perror("send");
+	  for(ii=0; ii<NRWPAIRS; ii++) {
+	    if (send(cw[ii].svc, cmdstop, strlen(cmdstop)+1, 0) == -1)
+	      perror("send");
+	  }
 	}
-	//else {
-	else if(strstr(src,"B0329+54") != NULL || strstr(src,"B0531+21") != NULL || strstr(src,"B0950+08") != NULL || strstr(src,"B0833-45") != NULL || strstr(src,"B1749-28") != NULL || strstr(src,"J0437-4715") != NULL) {
+	else {
+	//else if(strstr(src,"B0329+54") != NULL || strstr(src,"B0531+21") != NULL || strstr(src,"B0950+08") != NULL || strstr(src,"B0833-45") != NULL || strstr(src,"B1749-28") != NULL || strstr(src,"J0437-4715") != NULL || strstr(src,"B1642-03") != NULL || strstr(src,"B1641-45") != NULL || strstr(src,"J0341+5711") != NULL) {
 	  sprintf(cmdstart,"start %s",src);
-	  if (send(cr.svc, cmdstart, strlen(cmdstart)+1, 0) == -1)
-	    perror("send");
-	  if (send(cw.svc, cmdstart, strlen(cmdstart)+1, 0) == -1)
-	    perror("send");
+	  
+
+	  // TO ADD: Check that Readers/Writers are still connected before sending; change their isonnected elements if they are not
+    for(ii=0; ii<NRWPAIRS; ii++) {
+	    if (send(cr[ii].svc, cmdstart, strlen(cmdstart)+1, 0) == -1)
+	      perror("send");
+	    if (send(cw[ii].svc, cmdstart, strlen(cmdstart)+1, 0) == -1)
+	      perror("send");
+	  }
 
 	  sleep(60); //let the ring buffer fill
 	  
-	  if (send(cw.svc, cmdevent, strlen(cmdevent)+1, 0) == -1)
-	    perror("send");
+	  for(ii=0; ii<NRWPAIRS; ii++) {
+	    if (send(cw[ii].svc, cmdevent, strlen(cmdevent)+1, 0) == -1)
+	      perror("send");
+	  }
 
 	  //so that the EVENT and STOP commands aren't received as one string
-	  //sleep(2); 
+	  sleep(2); 
 
-	  //Writer will restart immediately after the EVENT is dumped to file, so stop it in order to capture only one data snippet per observation
-	  //if (send(cw.svc, cmdstop, strlen(cmdstop)+1, 0) == -1)
-	  //  perror("send");
-
-	  //Reader is in STATE_STOPPED after CMD_EVENT was sent to Writer, because Writer wrote an EOD to the ring buffer; need to restart it
-	  //if (send(cr.svc, cmdstart, strlen(cmdstart), 0) == -1)
-	  //  perror("send");
+	  for(ii=0; ii<NRWPAIRS; ii++) {
+	    if (send(cr[ii].svc, cmdstop, strlen(cmdstart)+1, 0) == -1)
+	      perror("send");
+	    if (send(cw[ii].svc, cmdstop, strlen(cmdstart)+1, 0) == -1)
+	      perror("send");
+	  }
 	}
 
       }
