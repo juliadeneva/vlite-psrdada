@@ -23,10 +23,8 @@ char antpropgrp[] = "239.192.3.1";
 char alertgrp[] = "239.192.2.3";
 
 //How many Reader/Writer pairs are there
-#define NRWPAIRS 2
-
-//for tests
-
+#define NRWPAIRS 4
+#define HOST0 2 //read data from difxN hosts where N >= HOST0
 
 void usage ()
 {
@@ -47,7 +45,7 @@ int main(int argc, char** argv)
   Connection cw[NRWPAIRS];
   char hostname[MAXHOSTNAME]; // = "vlite-difx1.evla.nrao.edu";
   fd_set readfds;
-  int obsinfosock, antpropsock, alertsock, maxnsock = 0, nbytes, ii, nhost = 0;
+  int obsinfosock, antpropsock, alertsock, maxnsock = 0, nbytes, ii, nhost = HOST0-1;
 
   ScanInfoDocument D; //multicast message struct
   const ObservationDocument *od;
@@ -198,15 +196,17 @@ int main(int argc, char** argv)
 	      perror("send");
 	  }
 
-	  //so that the EVENT and STOP commands aren't received as one string
-	  sleep(2); 
 
+	  //sleep(2); 
+
+	  /*
 	  for(ii=0; ii<NRWPAIRS; ii++) {
-	    if (send(cr[ii].svc, cmdstop, strlen(cmdstart)+1, 0) == -1)
-	      perror("send");
 	    if (send(cw[ii].svc, cmdstop, strlen(cmdstart)+1, 0) == -1)
 	      perror("send");
+	    if (send(cr[ii].svc, cmdstop, strlen(cmdstart)+1, 0) == -1)
+	      perror("send");
 	  }
+	  */
 	}
 
       }

@@ -8,9 +8,6 @@
 #include "def.h"
 #include "vdifio.h"
 
-//For now, instead of writing to output ring buffer or internal channelizer buffer
-char outfile[] = "test.fil";
-
 void usage ()
 {
   fprintf(stdout,"Usage: reader [options]\n"
@@ -26,9 +23,7 @@ int main(int argc, char** argv)
   uint64_t port = READER_SERVICE_PORT;
   char src[SRCMAXSIZE];
 
-  //FILE *outfd;
-  int BUFSIZE = VDIF_PKT_SIZE;
-  char buf[BUFSIZE];
+  char buf[VDIF_PKT_SIZE];
   int nbytes = 0;
 
   int state = STATE_STOPPED, cmd = CMD_NONE, ii;
@@ -62,13 +57,6 @@ int main(int argc, char** argv)
       break;
     }
   }
-
-  /*
-  if((outfd = fopen(outfile, "w")) == NULL) {
-    fprintf(stderr,"Could not open file %s\n",outfile);
-    exit(1);
-  }
-  */  
 
   if(ipcio_connect(&data_block,key) < 0)
     exit(1);
@@ -158,7 +146,7 @@ int main(int argc, char** argv)
 	cmd = CMD_NONE;
       }
     
-      nbytes = ipcio_read(&data_block,buf,BUFSIZE);
+      nbytes = ipcio_read(&data_block,buf,VDIF_PKT_SIZE);
       //fprintf(stderr,"ipcio_read: %d bytes\n",nbytes);
       //print VDIF frame header summary
       //printVDIFHeader((vdif_header *)buf, VDIFHeaderPrintLevelColumns);
@@ -172,14 +160,14 @@ int main(int argc, char** argv)
       */
 
       //ipcio_read waits if there's no EOD (end of data) written to the last unfilled subblock, so this condition is only met on EOD:
-      if(nbytes < BUFSIZE) {
+      if(nbytes < VDIF_PKT_SIZE) {
 	fprintf(stderr,"Reader: EOD found.\n");
 
 	if(ipcio_close(&data_block) < 0)
 	  exit(1);
 	fprintf(stderr,"after ipcio_close\n");
 	state = STATE_STOPPED;
-	
+	cmd = CMD_START;
       }
     }
   }

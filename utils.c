@@ -214,7 +214,7 @@ int conn(Connection *c)
 {
   struct hostent *hp;	/* host information */
   
-  printf("conn(host=\"%s\", port=\"%d\")\n", c->hostname, c->port);
+  //printf("conn(host=\"%s\", port=\"%d\")\n", c->hostname, c->port);
   
   /* get a tcp/ip socket */
   /* We do this as we did it for the server */
@@ -251,7 +251,7 @@ int conn(Connection *c)
     perror("getsockname failed");
     return -1;
   }
-  printf("local port number = %d\n", ntohs(c->my_addr.sin_port));
+  //printf("local port number = %d\n", ntohs(c->my_addr.sin_port));
   
   /* fill in the server's address and data */
   /* htons() converts a short integer to a network representation */

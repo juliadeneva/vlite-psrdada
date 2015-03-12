@@ -40,7 +40,7 @@ int main(int argc, char** argv)
   gethostname(hostname,MAXHOSTNAME);
   char *starthost = strstr(hostname, "difx");
   
-  int nbytes = 0, eventcount = 0, state = STATE_STOPPED;
+  int nbytes = 0, state = STATE_STOPPED;
   uint64_t port = WRITER_SERVICE_PORT;
   int cmd = CMD_NONE, ii, arg, maxsock = 0; 
   
@@ -103,13 +103,6 @@ int main(int argc, char** argv)
     fprintf(stderr,"Writer: Could not open skiplog file %s\n",skiplogfile);
     exit(1);
   }
-
-  /*
-  if((infd = fopen(infile, "r")) == NULL) {
-    fprintf(stderr,"Writer: Could not open file %s\n",infile);
-    exit(1);
-  }
-  */
   
   //Try to connect to existing data block
   if(ipcio_connect(&data_block,key) < 0)
@@ -190,7 +183,7 @@ int main(int argc, char** argv)
 	tmpt = localtime(&currt);
 	strftime(currt_string,sizeof(currt_string), "%Y%m%d_%H%M%S", tmpt);
 	*(currt_string+15) = 0;
-	sprintf(eventfile,"%s%s_%s_%s_ev_%04d.out",starthost,dev,currt_string,src,eventcount);
+	sprintf(eventfile,"%s%s_%s_%s_ev.out",starthost,dev,currt_string,src);
 	
 	if((evfd = fopen(eventfile,"w")) == NULL) {
 	  fprintf(stderr,"Writer: Could not open file %s for writing.\n",eventfile);
@@ -198,14 +191,16 @@ int main(int argc, char** argv)
 	}
 	event_to_file(&data_block,evfd);
 	fclose(evfd);
-	eventcount++;
 
 	//Flush out and ignore pending commands as they are out of date, then resume writing to ring buffer
 	FD_ZERO(&readfds);
 	FD_SET(c.rqst, &readfds);
+	FD_SET(raw.svc, &readfds);
+	select(maxsock+1,&readfds,NULL,NULL,&tv);
+
 	if(FD_ISSET(c.rqst,&readfds)) {
 	  cmd = wait_for_cmd(&c,src);
-	  fprintf(stderr,"Writer: flushed out command socket after event_to_file.");
+	  fprintf(stderr,"Writer: flushed out command socket after event_to_file.\n");
 	}
 	
 	state = STATE_STOPPED;

@@ -45,6 +45,14 @@ int main(int argc, char** argv)
       break;
       //printf("fread returned zero, framecount = %ld\n",framecount);
 
+    //print VDIF frame header summary
+    /*
+    printVDIFHeader((vdif_header *)buf, VDIFHeaderPrintLevelColumns);
+    printVDIFHeader((vdif_header *)buf, VDIFHeaderPrintLevelShort);
+    fflush(stdout);
+    //fprintf(stderr,"VDIFFrame MJD: %d Number: %d\n",getVDIFFrameMJD((vdif_header *)buf), getVDIFFrameNumber((vdif_header *)buf));
+    */
+
     framenumtmp = getVDIFFrameNumber((vdif_header *)buf);
     threadid = getVDIFThreadID((vdif_header *)buf);
     framediff = framenumtmp - framenum[threadid];
