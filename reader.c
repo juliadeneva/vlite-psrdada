@@ -21,12 +21,13 @@ int main(int argc, char** argv)
   key_t key = DADA_DEFAULT_BLOCK_KEY;
   int status = 0, arg;
   uint64_t port = READER_SERVICE_PORT;
-  char src[SRCMAXSIZE];
 
   char buf[VDIF_PKT_SIZE];
   int nbytes = 0;
 
-  int state = STATE_STOPPED, cmd = CMD_NONE, ii;
+  int state = STATE_STOPPED, ii; 
+  //int cmd = CMD_NONE;
+  char cmd = CMD_NONE;
 
   fd_set readfds;
   struct timeval tv; //timeout for select()--set it to zero 
@@ -75,8 +76,6 @@ int main(int argc, char** argv)
     exit(1);
   fprintf(stderr,"after ipcio_open, R\n");
   */
-
-  sprintf(src,"NONE");
   
   //ii = 0;
   while(1) {
@@ -86,7 +85,7 @@ int main(int argc, char** argv)
     if(state == STATE_STOPPED) {
       
       if(cmd == CMD_NONE)
-	cmd = wait_for_cmd(&c,src);
+	cmd = wait_for_cmd(&c);
 
       if(cmd == CMD_START) {
 	state = STATE_STARTED;
@@ -118,7 +117,7 @@ int main(int argc, char** argv)
       
       //if input is waiting on listening socket, read it
       if(FD_ISSET(c.rqst,&readfds))
-	cmd = wait_for_cmd(&c, src);
+	cmd = wait_for_cmd(&c);
       
       //if command is stop, change state to STOPPED, close data block
       if(cmd == CMD_STOP) {

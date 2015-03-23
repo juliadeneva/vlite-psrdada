@@ -23,7 +23,7 @@ char antpropgrp[] = "239.192.3.1";
 char alertgrp[] = "239.192.2.3";
 
 //How many Reader/Writer pairs are there
-#define NRWPAIRS 4
+#define NRWPAIRS 1
 #define HOST0 2 //read data from difxN hosts where N >= HOST0
 
 void usage ()
@@ -35,10 +35,10 @@ void usage ()
 
 int main(int argc, char** argv)
 {
-  char cmdstop[] = "stop";
-  char cmdevent[] = "event";
-  char cmdquit[] = "quit";
-  char cmdstart[32]; //this will be of the form 'start <src>'
+  const char cmdstop[] = {CMD_STOP};
+  const char cmdevent[] = {CMD_EVENT};
+  const char cmdquit[] = {CMD_QUIT};
+  const char cmdstart[] = {CMD_START};
 
   //XXX: in final version, there will be an array of readers and an array of writers, so initial connection attempts as well as each command send will loop over those. (How to get port numbers for all? Specify on command line?)  
   Connection cr[NRWPAIRS];
@@ -172,41 +172,36 @@ int main(int argc, char** argv)
 	// TO ADD: Check that Writers are still connected before sending; change their isonnected elements if they are not
 	if (strcasecmp(src,"FINISH") == 0) {
 	  for(ii=0; ii<NRWPAIRS; ii++) {
-	    if (send(cw[ii].svc, cmdstop, strlen(cmdstop)+1, 0) == -1)
+	    if (send(cw[ii].svc, cmdstop, 1, 0) == -1)
 	      perror("send");
 	  }
 	}
 	else {
 	//else if(strstr(src,"B0329+54") != NULL || strstr(src,"B0531+21") != NULL || strstr(src,"B0950+08") != NULL || strstr(src,"B0833-45") != NULL || strstr(src,"B1749-28") != NULL || strstr(src,"J0437-4715") != NULL || strstr(src,"B1642-03") != NULL || strstr(src,"B1641-45") != NULL || strstr(src,"J0341+5711") != NULL) {
-	  sprintf(cmdstart,"start %s",src);
-	  
-
+	 
 	  // TO ADD: Check that Readers/Writers are still connected before sending; change their isonnected elements if they are not
-    for(ii=0; ii<NRWPAIRS; ii++) {
-	    if (send(cr[ii].svc, cmdstart, strlen(cmdstart)+1, 0) == -1)
+	  for(ii=0; ii<NRWPAIRS; ii++) {
+	    if (send(cr[ii].svc, cmdstart, 1, 0) == -1)
 	      perror("send");
-	    if (send(cw[ii].svc, cmdstart, strlen(cmdstart)+1, 0) == -1)
+	    if (send(cw[ii].svc, cmdstart, 1, 0) == -1)
 	      perror("send");
 	  }
-
+	  
 	  sleep(60); //let the ring buffer fill
 	  
 	  for(ii=0; ii<NRWPAIRS; ii++) {
-	    if (send(cw[ii].svc, cmdevent, strlen(cmdevent)+1, 0) == -1)
+	    if (send(cw[ii].svc, cmdevent, 1, 0) == -1)
 	      perror("send");
 	  }
 
+	  sleep(2); 
 
-	  //sleep(2); 
-
-	  /*
 	  for(ii=0; ii<NRWPAIRS; ii++) {
-	    if (send(cw[ii].svc, cmdstop, strlen(cmdstart)+1, 0) == -1)
+	    if (send(cw[ii].svc, cmdstop, 1, 0) == -1)
 	      perror("send");
-	    if (send(cr[ii].svc, cmdstop, strlen(cmdstart)+1, 0) == -1)
+	    if (send(cr[ii].svc, cmdstop, 1, 0) == -1)
 	      perror("send");
 	  }
-	  */
 	}
 
       }
@@ -266,13 +261,5 @@ int main(int argc, char** argv)
     */
     
   } //end while
-
-  //no need to close connections, just send quit commands to reader & writer
-  //if(send(cw.svc, cmdquit, strlen(cmdquit),0) == -1)
-  //perror("send");
-  //if(send(cr.svc, cmdquit, strlen(cmdquit),0) == -1)
-  //  perror("send");
-
-  //close multicast sockets
   
 }

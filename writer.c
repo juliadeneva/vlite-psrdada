@@ -29,7 +29,7 @@ int main(int argc, char** argv)
   key_t key = DADA_DEFAULT_BLOCK_KEY;
   int status = 0;
 
-  char eventfile[128], src[SRCMAXSIZE];
+  char eventfile[128];
   FILE *infd, *evfd;
 
   //get this many bytes at a time from data socket
@@ -42,7 +42,9 @@ int main(int argc, char** argv)
   
   int nbytes = 0, state = STATE_STOPPED;
   uint64_t port = WRITER_SERVICE_PORT;
-  int cmd = CMD_NONE, ii, arg, maxsock = 0; 
+  //int cmd = CMD_NONE;
+  char cmd = CMD_NONE;
+  int ii, arg, maxsock = 0; 
   
   fd_set readfds;
   struct timeval tv; //timeout for select()--set it to zero 
@@ -127,17 +129,14 @@ int main(int argc, char** argv)
     maxsock = raw.svc;
 
   //ii = 0;
-  sprintf(src,"NONE");
 
-  //in final version, this loop will be while(1)
-  //while(!feof(infd)) {
   while(1) {
     //ii++;
     //printf("ii: %d state: %d cmd: %d\n",ii,state,cmd);
 
     if(state == STATE_STOPPED) {
       if(cmd == CMD_NONE)
-	cmd = wait_for_cmd(&c,src);
+	cmd = wait_for_cmd(&c);
 
       if(cmd == CMD_START) {
 	state = STATE_STARTED;
@@ -169,7 +168,7 @@ int main(int argc, char** argv)
       
       //if input is waiting on listening socket, read it
       if(FD_ISSET(c.rqst,&readfds)) {
-	cmd = wait_for_cmd(&c,src);
+	cmd = wait_for_cmd(&c);
       }
 
       if(cmd == CMD_EVENT) {
@@ -183,7 +182,7 @@ int main(int argc, char** argv)
 	tmpt = localtime(&currt);
 	strftime(currt_string,sizeof(currt_string), "%Y%m%d_%H%M%S", tmpt);
 	*(currt_string+15) = 0;
-	sprintf(eventfile,"%s%s_%s_%s_ev.out",starthost,dev,currt_string,src);
+	sprintf(eventfile,"%s%s_%s_ev.out",starthost,dev,currt_string);
 	
 	if((evfd = fopen(eventfile,"w")) == NULL) {
 	  fprintf(stderr,"Writer: Could not open file %s for writing.\n",eventfile);
@@ -198,13 +197,13 @@ int main(int argc, char** argv)
 	FD_SET(raw.svc, &readfds);
 	select(maxsock+1,&readfds,NULL,NULL,&tv);
 
+	state = STATE_STOPPED;
 	if(FD_ISSET(c.rqst,&readfds)) {
-	  cmd = wait_for_cmd(&c,src);
+	  cmd = wait_for_cmd(&c);
 	  fprintf(stderr,"Writer: flushed out command socket after event_to_file.\n");
 	}
-	
-	state = STATE_STOPPED;
-	cmd = CMD_START; 
+	else
+	  cmd = CMD_START; 
 	
 	//don't write anything to the data block before checking for any pending commands (this can lead to writing a standalone EOD in the data block if there's a stop pending)
 	continue; 

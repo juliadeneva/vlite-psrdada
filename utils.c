@@ -99,6 +99,57 @@ int serve(int port, Connection* c)
 
   XXX: Check that socket is still open? (how?)
  */
+int wait_for_cmd(Connection* c)
+{
+  int nbytes, ii;
+  char tmp;
+
+  printf("in wait_for_cmd\n");
+
+  nbytes = read(c->rqst,c->buf,MAXINBUFSIZE);
+  c->buf[nbytes] = '\0';
+  printf("wait_for_cmd: read %d bytes: %.*s\n",nbytes,nbytes,c->buf);
+  
+  if(nbytes == 0) {
+    fprintf(stderr,"wait_for_cmd: Lost connection with Messenger. Defaulting to CMD_QUIT.\n");
+    return CMD_QUIT;
+  }
+
+  //Normal operation: one command character received at a time
+  if(nbytes == 1) {
+    switch(c->buf[0]) {
+    case CMD_START: return CMD_START;
+    case CMD_STOP: return CMD_STOP;
+    case CMD_QUIT: return CMD_QUIT;
+    case CMD_EVENT: return CMD_EVENT;
+    default: {
+      printf("wait_for_cmd: Unrecognized command %c, defaulting to CMD_NONE.\n",c->buf[ii]);
+      return CMD_NONE;
+    }
+    }
+  } 
+  //Backlogged commands: return the most recent non-event command.
+  else {
+    for(ii=nbytes-1; ii>=0; ii--) {
+      switch(c->buf[ii]) {
+      case CMD_START: return CMD_START;
+      case CMD_STOP: return CMD_STOP;
+      case CMD_QUIT: return CMD_QUIT;
+      case CMD_EVENT: continue;
+	//case '\0': continue;
+      default: {
+	printf("wait_for_cmd: Unrecognized command %c, defaulting to CMD_NONE.\n",c->buf[ii]);
+	return CMD_NONE;
+      }
+      }
+    }
+    
+    //We get here if only CMD_EVENTs are backlogged; ignore them.
+    return CMD_NONE;
+  }
+}
+
+/*
 int wait_for_cmd(Connection* c, char *src)
 {
   int nbytes, n;
@@ -163,6 +214,8 @@ int wait_for_cmd(Connection* c, char *src)
     }
     //}
 }
+*/
+
 
 /*
   Input: pointer to initialized data block, opened writable file descriptor
