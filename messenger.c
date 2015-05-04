@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
 
 #include "Connection.h"
 #include "def.h"
@@ -52,12 +53,17 @@ int main(int argc, char** argv)
   const AntPropDocument *ap;
   //AlertDocument A; 
 
+  time_t currt;
+  char currt_string[128];
+  struct tm *tmpt;
+
   char scaninfofile[128];
+  char eventlogfile[] = "eventlog.txt";
   char msg[MSGMAXSIZE];
   char src[SRCMAXSIZE];
   char from[24]; //ip address of multicast sender
 
-  FILE *sfd;
+  FILE *sfd, *efd;
 
   //Initialize Connections and connect to Readers/Writers: two pairs per difx host
   for(ii=0; ii<NRWPAIRS; ii++) {
@@ -132,6 +138,12 @@ int main(int argc, char** argv)
   }
   */
 
+  //Open event log
+  if((efd = fopen(eventlogfile, "a")) == NULL) {
+    fprintf(stderr,"Messenger: Could not open event log file %s\n",eventlogfile);
+    exit(1);
+  }
+
   while(1) {
     /* From Walter: The antprop message comes whenever a new scheduling block starts and at each UT midnight (where EOP values might change). Observation document happens before each new scan and a FINISH document at the end of a scheduling block. At the beginning of the scheduling block the antprop document always precedes the observation document.
      */
@@ -163,7 +175,7 @@ int main(int argc, char** argv)
 	strcpy(src,od->name);
 	//printf("src: %s\n",src);
 
-	sprintf(scaninfofile,"%s.obsinfo.%04d.%04d.txt",od->datasetId,od->scanNo,od->subscanNo);
+	sprintf(scaninfofile,"%s.%s.obsinfo.%04d.%04d.txt",od->datasetId,od->name,od->scanNo,od->subscanNo);
 	sfd = fopen(scaninfofile,"w");
 	fprintScanInfoDocument(&D,sfd);
 	fclose(sfd);
@@ -176,8 +188,8 @@ int main(int argc, char** argv)
 	      perror("send");
 	  }
 	}
-	else {
-	//else if(strstr(src,"B0329+54") != NULL || strstr(src,"B0531+21") != NULL || strstr(src,"B0950+08") != NULL || strstr(src,"B0833-45") != NULL || strstr(src,"B1749-28") != NULL || strstr(src,"J0437-4715") != NULL || strstr(src,"B1642-03") != NULL || strstr(src,"B1641-45") != NULL || strstr(src,"J0341+5711") != NULL) {
+	//else {
+	else if(strstr(src,"B0329+54") != NULL || strstr(src,"B0531+21") != NULL || strstr(src,"B0950+08") != NULL || strstr(src,"B0833-45") != NULL || strstr(src,"B1749-28") != NULL || strstr(src,"J0437-4715") != NULL || strstr(src,"B1642-03") != NULL || strstr(src,"B1641-45") != NULL || strstr(src,"J0341+5711") != NULL) {
 	 
 	  // TO ADD: Check that Readers/Writers are still connected before sending; change their isonnected elements if they are not
 	  for(ii=0; ii<NRWPAIRS; ii++) {
@@ -192,6 +204,15 @@ int main(int argc, char** argv)
 	  for(ii=0; ii<NRWPAIRS; ii++) {
 	    if (send(cw[ii].svc, cmdevent, 1, 0) == -1)
 	      perror("send");
+	    else { 
+	      //Record trigger in event log
+	      currt = time(NULL);
+	      tmpt = localtime(&currt);
+	      strftime(currt_string,sizeof(currt_string), "%Y%m%d_%H%M%S", tmpt);
+	      *(currt_string+15) = 0;
+	      fprintf(efd,"%s: Host: %s Port: %d\n",currt_string,cw[ii].hostname,cw[ii].port);
+	      fprintf(efd,"%s: SRC: %s, datasetId = %s\n\n",currt_string,src,od->datasetId);
+	    }
 	  }
 
 	  sleep(2); 
@@ -261,5 +282,6 @@ int main(int argc, char** argv)
     */
     
   } //end while
-  
+
+  fclose(efd);
 }
