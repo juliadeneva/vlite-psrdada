@@ -140,7 +140,7 @@ int main(int argc, char** argv)
 
   //Open event log
   if((efd = fopen(eventlogfile, "a")) == NULL) {
-    fprintf(stderr,"Messenger: Could not open event log file %s\n",eventlogfile);
+    fprintf(stderr,"Messenger: Could not open event log file %s for writing.\n",eventlogfile);
     exit(1);
   }
 
@@ -174,12 +174,17 @@ int main(int argc, char** argv)
 	od = &(D.data.observation);
 	strcpy(src,od->name);
 	//printf("src: %s\n",src);
+	
+	sprintf(scaninfofile,"%s/%s.%s.obsinfo.%04d.%04d.txt",OBSINFODIR,od->datasetId,od->name,od->scanNo,od->subscanNo);
 
-	sprintf(scaninfofile,"%s.%s.obsinfo.%04d.%04d.txt",od->datasetId,od->name,od->scanNo,od->subscanNo);
-	sfd = fopen(scaninfofile,"w");
-	fprintScanInfoDocument(&D,sfd);
-	fclose(sfd);
-
+	if((sfd = fopen(scaninfofile,"w")) == NULL) {
+	  fprintf(stderr,"Messenger: Could not open file %s for writing.\n",scaninfofile);
+	}
+	else {
+	  fprintScanInfoDocument(&D,sfd);
+	  fclose(sfd);
+	}
+      
 
 	// TO ADD: Check that Writers are still connected before sending; change their isonnected elements if they are not
 	if (strcasecmp(src,"FINISH") == 0) {
@@ -243,11 +248,16 @@ int main(int argc, char** argv)
       if(D.type == SCANINFO_ANTPROP) {
 	ap = &(D.data.antProp);
 
-	sprintf(scaninfofile,"%s.antprop.txt",ap->datasetId);
+	sprintf(scaninfofile,"%s/%s.antprop.txt",OBSINFODIR,ap->datasetId);
 	sfd = fopen(scaninfofile,"w");
-	fprintScanInfoDocument(&D,sfd);
-	fclose(sfd);
 
+	if((sfd = fopen(scaninfofile,"w")) == NULL) {
+	  fprintf(stderr,"Messenger: Could not open file %s for writing.\n",scaninfofile);
+	}
+	else {
+	  fprintScanInfoDocument(&D,sfd);
+	  fclose(sfd);
+	}
       }
     }
 

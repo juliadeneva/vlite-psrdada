@@ -102,7 +102,7 @@ int main(int argc, char** argv)
 
   sprintf(skiplogfile,"%s%s%s%s","skiplog-",starthost,dev,".txt");
   if((skiplogfd = fopen(skiplogfile, "w")) == NULL) {
-    fprintf(stderr,"Writer: Could not open skiplog file %s\n",skiplogfile);
+    fprintf(stderr,"Writer: Could not open skiplog file %s for writing.\n",skiplogfile);
     exit(1);
   }
   
@@ -182,16 +182,17 @@ int main(int argc, char** argv)
 	tmpt = localtime(&currt);
 	strftime(currt_string,sizeof(currt_string), "%Y%m%d_%H%M%S", tmpt);
 	*(currt_string+15) = 0;
-	sprintf(eventfile,"%s%s_%s_ev.out",starthost,dev,currt_string);
+	sprintf(eventfile,"%s/%s%s_%s_ev.out",EVENTDIR,starthost,dev,currt_string);
 	
 	if((evfd = fopen(eventfile,"w")) == NULL) {
 	  fprintf(stderr,"Writer: Could not open file %s for writing.\n",eventfile);
-	  exit(1);
 	}
-	event_to_file(&data_block,evfd);
-	fclose(evfd);
+	else {
+	  event_to_file(&data_block,evfd);
+	  fclose(evfd);
+	}
 
-	//Flush out and ignore pending commands as they are out of date, then resume writing to ring buffer
+	//Get pending commands, resume writing to ring buffer if there are none
 	FD_ZERO(&readfds);
 	FD_SET(c.rqst, &readfds);
 	FD_SET(raw.svc, &readfds);
@@ -205,7 +206,6 @@ int main(int argc, char** argv)
 	else
 	  cmd = CMD_START; 
 	
-	//don't write anything to the data block before checking for any pending commands (this can lead to writing a standalone EOD in the data block if there's a stop pending)
 	continue; 
       }
       //if command is stop, change state to STOPPED, close data block

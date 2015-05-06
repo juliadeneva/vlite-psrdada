@@ -23,3 +23,7 @@
 #define ETHDEV "eth0"
 
 #define MAXFRAMENUM 25599
+
+#define EVENTDIR "/home/vlite-master/frb-search/pulsar-vdif-data"
+#define OBSINFODIR "/home/vlite-master/frb-search/obsinfo-antprop"
+
